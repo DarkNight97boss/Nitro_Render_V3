@@ -62,3 +62,63 @@ const data2 = await fetchConfigJson<MyConfig>('/configuration/ui-config.json5');
 
 Errors carry the source URL and, in `legacy` mode, a hint about switching to
 JSON5 — making misconfigurations easy to diagnose in production logs.
+
+## Split-aware gamedata loader
+
+`@nitrots/utils` also exports `loadGamedata`, the loader that backs every
+gamedata consumer in the renderer (FurnitureDataLoader, ProductDataLoader,
+EffectAssetDownloadManager, AvatarRenderManager, LocalizationManager). It
+accepts either a **single-file URL** (legacy) or a **directory URL** (split
+mode) — detected automatically by the trailing slash.
+
+### Directory layout
+
+```
+<gamedata-dir>/
+  manifest.json5            # OPTIONAL — { "tiers": ["core", "custom", "seasonal"] }
+  core/
+    manifest.json5          # REQUIRED — { "files": ["a.json5", "b.json5", ...] }
+    a.json5
+    b.json5
+  custom/                   # OPTIONAL tier
+    manifest.json5
+    overrides.json5
+  seasonal/                 # OPTIONAL tier
+    manifest.json5
+    xmas.json5
+```
+
+If the directory `manifest.json5` is absent, the loader falls back to the
+default tier order `core → custom → seasonal`. Each tier is skipped silently
+if its `manifest.json5` is missing.
+
+### Merge semantics
+
+`mergeGamedata(a, b)` (also exported) implements the rules below; tiers and
+files within a tier are merged in order, with later layers overriding
+earlier ones:
+
+| Combination                              | Result                                       |
+|------------------------------------------|----------------------------------------------|
+| Two plain objects                        | recursive merge, key by key                  |
+| Two arrays of objects sharing an id key  | merged by id (later overrides earlier)       |
+| Two arrays without an id key             | concatenated                                 |
+| Anything else                            | later value wins                             |
+
+Recognised id keys (in priority order): `id`, `classname`, `name`. Pass
+`mergeArrayIdKeys` in the options object to extend or override them.
+
+### Programmatic usage
+
+```ts
+import { loadGamedata, mergeGamedata } from '@nitrots/utils';
+
+// host code never needs to care whether the URL is split or not
+const furnidata = await loadGamedata('https://example.com/gamedata/furnidata/');
+
+// merge ad-hoc if you load tiers manually
+const merged = mergeGamedata(coreData, customData);
+```
+
+A CLI splitter for legacy single-file gamedata lives in the Nitro V3 client
+repo at `scripts/split-gamedata.mjs` — see the Nitro V3 README for usage.
