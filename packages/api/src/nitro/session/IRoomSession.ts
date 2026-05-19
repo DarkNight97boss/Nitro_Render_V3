@@ -13,7 +13,7 @@ export interface IRoomSession
     sendShoutMessage(text: string, styleId: number, chatColour?: string): void;
     sendWhisperMessage(recipientName: string, text: string, styleId: number): void;
     sendChatTypingMessage(isTyping: boolean): void;
-    sendBackgroundMessage(backgroundImage: number, backgroundStand: number, backgroundOverlay: number, backgroundCard?: number): void;
+    sendBackgroundMessage(backgroundImage: number, backgroundStand: number, backgroundOverlay: number, backgroundCard?: number, backgroundBorder?: number): void;
     sendMottoMessage(motto: string): void;
     sendDanceMessage(danceId: number): void;
     sendExpressionMessage(expression: number): void;
