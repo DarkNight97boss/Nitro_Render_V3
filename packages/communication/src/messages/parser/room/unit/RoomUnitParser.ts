@@ -146,16 +146,17 @@ export class RoomUnitParser implements IMessageParser
 
             user.roomEntryMethod = wrapper.readString();
             user.roomEntryTeleportId = wrapper.readInt();
-            // NOTE: do NOT read borderId here. `wrapper.bytesAvailable`
-            // is a boolean meaning "any bytes left in the whole packet?",
-            // not "any bytes left in THIS user". For users that aren't
-            // the last in the roster, bytesAvailable === true because
-            // the NEXT user's bytes follow — reading an int would steal
-            // 4 bytes from the next user and cascade-corrupt the entire
-            // roster (users not seeing each other on first sight). The
-            // border id for an individual user arrives via
-            // RoomUnitInfoParser (single-user packet), where the
-            // bytesAvailable guard is safe because there is no loop.
+            // Arcturus appends a trailing borderId int per user
+            // (RoomUsersComposer, after the Infostand Borders feature)
+            // for every record — habbo, bot, rentable bot — using 0 as
+            // the constant for the records that have no border. The
+            // read MUST be unconditional: a bytesAvailable guard would
+            // be semantically wrong here (the guard answers "any byte
+            // left in the whole packet?" not "any byte left for THIS
+            // user"), and skipping the read would leave 4 bytes per
+            // record and cascade-corrupt every subsequent user in the
+            // roster.
+            user.borderId = wrapper.readInt();
 
             i++;
         }
