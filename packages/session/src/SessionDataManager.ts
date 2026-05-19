@@ -32,6 +32,11 @@ export class SessionDataManager implements ISessionDataManager
     private _clubLevel: number = 0;
     private _securityLevel: number = 0;
     private _isAmbassador: boolean = false;
+    private _rankId: number = 0;
+    private _rankName: string = '';
+    private _rankBadge: string = '';
+    private _rankPrefix: string = '';
+    private _rankPrefixColor: string = '';
     private _noobnessLevel: number = -1;
     private _isEmailVerified: boolean = false;
 
@@ -89,7 +94,12 @@ export class SessionDataManager implements ISessionDataManager
             isSystemOpen: this._systemOpen,
             isSystemShutdown: this._systemShutdown,
             uiFlags: this._uiFlags,
-            tags: Object.freeze<string[]>([...this._tags]) as ReadonlyArray<string>
+            tags: Object.freeze<string[]>([...this._tags]) as ReadonlyArray<string>,
+            rankId: this._rankId,
+            rankName: this._rankName,
+            rankBadge: this._rankBadge,
+            rankPrefix: this._rankPrefix,
+            rankPrefixColor: this._rankPrefixColor
         });
 
         return this._userDataSnapshot;
@@ -239,9 +249,16 @@ export class SessionDataManager implements ISessionDataManager
     {
         if(!event || !event.connection) return;
 
-        this._clubLevel = event.getParser().clubLevel;
-        this._securityLevel = event.getParser().securityLevel;
-        this._isAmbassador = event.getParser().isAmbassador;
+        const parser = event.getParser();
+
+        this._clubLevel = parser.clubLevel;
+        this._securityLevel = parser.securityLevel;
+        this._isAmbassador = parser.isAmbassador;
+        this._rankId = parser.rankId;
+        this._rankName = parser.rankName;
+        this._rankBadge = parser.rankBadge;
+        this._rankPrefix = parser.rankPrefix;
+        this._rankPrefixColor = parser.rankPrefixColor;
 
         this.invalidateUserDataSnapshot();
     }
