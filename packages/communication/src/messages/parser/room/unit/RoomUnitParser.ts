@@ -146,7 +146,16 @@ export class RoomUnitParser implements IMessageParser
 
             user.roomEntryMethod = wrapper.readString();
             user.roomEntryTeleportId = wrapper.readInt();
-            user.borderId = (wrapper.bytesAvailable ? wrapper.readInt() : 0);
+            // NOTE: do NOT read borderId here. `wrapper.bytesAvailable`
+            // is a boolean meaning "any bytes left in the whole packet?",
+            // not "any bytes left in THIS user". For users that aren't
+            // the last in the roster, bytesAvailable === true because
+            // the NEXT user's bytes follow — reading an int would steal
+            // 4 bytes from the next user and cascade-corrupt the entire
+            // roster (users not seeing each other on first sight). The
+            // border id for an individual user arrives via
+            // RoomUnitInfoParser (single-user packet), where the
+            // bytesAvailable guard is safe because there is no loop.
 
             i++;
         }
