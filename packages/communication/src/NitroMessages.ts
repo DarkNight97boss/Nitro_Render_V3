@@ -7,7 +7,7 @@ import { ConfInvisStateMessageEvent } from './messages';
 import { HanditemBlockStateMessageEvent } from './messages';
 import { TranslationLanguagesEvent, TranslationLanguagesRequestComposer, TranslationResultEvent, TranslationTextRequestComposer } from './messages';
 import { YouTubeRoomBroadcastEvent, YouTubeRoomPlayComposer, YouTubeRoomSettingsComposer, YouTubeRoomSettingsEvent, YouTubeRoomWatchersEvent, YouTubeRoomWatchingComposer } from './messages';
-import { HousekeepingFindUserByNameComposer, HousekeepingUserDetailEvent } from './messages';
+import { HousekeepingFindUserByIdComposer, HousekeepingFindUserByNameComposer, HousekeepingUserDetailEvent } from './messages';
 export class NitroMessages implements IMessageConfiguration
 {
     private _events: Map<number, Function>;
@@ -1262,6 +1262,7 @@ export class NitroMessages implements IMessageConfiguration
 
         // Housekeeping (in-client admin panel)
         this._composers.set(OutgoingHeader.HOUSEKEEPING_FIND_USER_BY_NAME, HousekeepingFindUserByNameComposer);
+        this._composers.set(OutgoingHeader.HOUSEKEEPING_FIND_USER_BY_ID, HousekeepingFindUserByIdComposer);
     }
 
     public get events(): Map<number, Function>
