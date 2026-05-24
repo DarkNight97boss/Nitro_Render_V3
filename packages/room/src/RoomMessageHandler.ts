@@ -291,7 +291,49 @@ export class RoomMessageHandler
 
         roomObject.processUpdateMessage(new ObjectRoomMapUpdateMessage(roomMap));
 
+        // Floor visualization is updated above. Without this second
+        // step the FurnitureStackingHeightMap still reflects the
+        // pre-edit floor, so the room thinks every newly-painted
+        // tile is "blocked" and rejects furni placement on it.
+        // Rebuild it from the same parser so the stacking-map and
+        // the visual floor agree.
+        this._rebuildFurnitureStackingMap(parser);
+
         return true;
+    }
+
+    private _rebuildFurnitureStackingMap(parser: FloorHeightMapMessageParser): void
+    {
+        if(!this._roomEngine) return;
+
+        const width = parser.width;
+        const height = parser.height;
+        const heightMap = new FurnitureStackingHeightMap(width, height);
+        const BLOCKED = FloorHeightMapMessageParser.TILE_BLOCKED;
+
+        let y = 0;
+
+        while(y < height)
+        {
+            let x = 0;
+
+            while(x < width)
+            {
+                const tileHeight = parser.getHeight(x, y);
+                const isRoomTile = (tileHeight !== BLOCKED);
+
+                heightMap.setTileHeight(x, y, isRoomTile ? tileHeight : 0);
+                heightMap.setStackingBlocked(x, y, false);
+                heightMap.setIsRoomTile(x, y, isRoomTile);
+
+                x++;
+            }
+
+            y++;
+        }
+
+        this._roomEngine.setFurnitureStackingHeightMap(this._currentRoomId, heightMap);
+        this._roomEngine.refreshTileObjectMap(this._currentRoomId, 'RoomMessageHandler.applyFloorModelLocally');
     }
 
     /**
