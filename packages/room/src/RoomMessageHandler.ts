@@ -2,10 +2,16 @@ import { AvatarGuideStatus, IConnection, IMessageEvent, IRoomCreator, IRoomObjec
 import { AreaHideMessageEvent, ConfInvisStateMessageEvent, DiceValueMessageEvent, FloorHeightMapEvent, FurnitureAliasesComposer, FurnitureAliasesEvent, FurnitureDataEvent, FurnitureFloorAddEvent, FurnitureFloorDataParser, FurnitureFloorEvent, FurnitureFloorRemoveEvent, FurnitureFloorUpdateEvent, FurnitureWallAddEvent, FurnitureWallDataParser, FurnitureWallEvent, FurnitureWallRemoveEvent, FurnitureWallUpdateEvent, GetCommunication, GetRoomEntryDataMessageComposer, GuideSessionEndedMessageEvent, GuideSessionErrorMessageEvent, GuideSessionStartedMessageEvent, IgnoreResultEvent, ItemDataUpdateMessageEvent, ObjectsDataUpdateEvent, ObjectsRollingEvent, OneWayDoorStatusMessageEvent, PetExperienceEvent, PetFigureUpdateEvent, RoomEntryTileMessageEvent, RoomEntryTileMessageParser, RoomHeightMapEvent, RoomHeightMapUpdateEvent, RoomPaintEvent, RoomReadyMessageEvent, RoomUnitChatEvent, RoomUnitChatShoutEvent, RoomUnitChatWhisperEvent, RoomUnitDanceEvent, RoomUnitEffectEvent, RoomUnitEvent, RoomUnitExpressionEvent, RoomUnitHandItemEvent, RoomUnitIdleEvent, RoomUnitInfoEvent, RoomUnitNumberEvent, RoomUnitRemoveEvent, RoomUnitStatusEvent, RoomUnitStatusMessage, RoomUnitTypingEvent, RoomVisualizationSettingsEvent, UserInfoEvent, WiredFurniMovementData, WiredMovementsEvent, WiredUserDirectionUpdateData, WiredUserMovementData, YouArePlayingGameEvent } from '@nitrots/communication';
 import { GetRoomSessionManager, GetSessionDataManager } from '@nitrots/session';
 import { Vector3d } from '@nitrots/utils';
+import { FloorHeightMapMessageParser } from '@nitrots/communication';
 import { GetRoomEngine } from './GetRoomEngine';
 import { RoomVariableEnum } from './RoomVariableEnum';
+import { ObjectRoomMapUpdateMessage } from './messages';
 import { RoomPlaneParser } from './object/RoomPlaneParser';
 import { FurnitureStackingHeightMap, LegacyWallGeometry } from './utils';
+
+// Local mirror of `RoomEngine.ROOM_OBJECT_ID` to avoid a circular
+// import between this handler and the engine that owns it.
+const ROOM_OWN_OBJECT_ID = -1;
 
 type AreaHideControllerState = {
     rootX: number;
@@ -232,9 +238,117 @@ export class RoomMessageHandler
 
         if(!parser) return;
 
+        const roomMap = this._rebuildFloorGeometry(parser);
+
+        if(!roomMap) return;
+
+        // Initial server-driven load: create the instance from
+        // scratch. RoomEngine.createRoomInstance is a no-op when
+        // the room already exists, so we never accidentally wipe
+        // furniture/avatars on a re-enter.
+        this._roomEngine.createRoomInstance(this._currentRoomId, roomMap);
+    }
+
+    /**
+     * Apply a floor model to the ACTIVE room locally, without
+     * touching the server. Drives the same `wallGeometry` +
+     * `RoomPlaneParser` pipeline as the wire-driven path, then
+     * routes the resulting `RoomMapData` through the room object's
+     * `ObjectRoomMapUpdateMessage` channel — the same mechanism
+     * `RoomPreviewer.updateRoomPlanes` uses. The visualization
+     * rebuilds in place, so existing furniture and avatars are
+     * preserved.
+     *
+     * Intended for tools that need a live in-room preview of a
+     * floor edit before the user commits to a server save (e.g.
+     * the React floor-plan editor's live-preview mode). The wire
+     * `UpdateFloorPropertiesMessageComposer` is still the source
+     * of truth — call this purely for transient client-side
+     * preview, then send the composer separately when the user
+     * confirms.
+     *
+     * @returns `true` if the floor was rebuilt; `false` if no
+     *   active room is bound, the engine isn't ready, or the
+     *   model string failed to parse.
+     */
+    public applyFloorModelLocally(modelString: string, wallHeight: number, scale: boolean = true): boolean
+    {
+        if(!this._roomEngine || this._currentRoomId <= 0 || !modelString) return false;
+
+        const parser = new FloorHeightMapMessageParser();
+
+        parser.flush();
+
+        if(!parser.parseModel(modelString, wallHeight, scale)) return false;
+
+        const roomMap = this._rebuildFloorGeometry(parser);
+
+        if(!roomMap) return false;
+
+        const roomObject = this._roomEngine.getRoomObject(this._currentRoomId, ROOM_OWN_OBJECT_ID, RoomObjectCategory.ROOM);
+
+        if(!roomObject) return false;
+
+        roomObject.processUpdateMessage(new ObjectRoomMapUpdateMessage(roomMap));
+
+        // Floor visualization is updated above. Without this second
+        // step the FurnitureStackingHeightMap still reflects the
+        // pre-edit floor, so the room thinks every newly-painted
+        // tile is "blocked" and rejects furni placement on it.
+        // Rebuild it from the same parser so the stacking-map and
+        // the visual floor agree.
+        this._rebuildFurnitureStackingMap(parser);
+
+        return true;
+    }
+
+    private _rebuildFurnitureStackingMap(parser: FloorHeightMapMessageParser): void
+    {
+        if(!this._roomEngine) return;
+
+        const width = parser.width;
+        const height = parser.height;
+        const heightMap = new FurnitureStackingHeightMap(width, height);
+        const BLOCKED = FloorHeightMapMessageParser.TILE_BLOCKED;
+
+        let y = 0;
+
+        while(y < height)
+        {
+            let x = 0;
+
+            while(x < width)
+            {
+                const tileHeight = parser.getHeight(x, y);
+                const isRoomTile = (tileHeight !== BLOCKED);
+
+                heightMap.setTileHeight(x, y, isRoomTile ? tileHeight : 0);
+                heightMap.setStackingBlocked(x, y, false);
+                heightMap.setIsRoomTile(x, y, isRoomTile);
+
+                x++;
+            }
+
+            y++;
+        }
+
+        this._roomEngine.setFurnitureStackingHeightMap(this._currentRoomId, heightMap);
+        this._roomEngine.refreshTileObjectMap(this._currentRoomId, 'RoomMessageHandler.applyFloorModelLocally');
+    }
+
+    /**
+     * Shared body of `onRoomModelEvent` and
+     * `applyFloorModelLocally`. Feeds the floor heightmap into
+     * `_planeParser`, refreshes `wallGeometry`, and returns the
+     * resulting `RoomMapData` (doors included). The caller decides
+     * whether to seed a fresh room (initial enter) or update an
+     * existing one (live preview).
+     */
+    private _rebuildFloorGeometry(parser: FloorHeightMapMessageParser)
+    {
         const wallGeometry = this._roomEngine.getLegacyWallGeometry(this._currentRoomId);
 
-        if(!wallGeometry) return;
+        if(!wallGeometry) return null;
 
         this._planeParser.reset();
 
@@ -320,7 +434,7 @@ export class RoomMessageHandler
             dir: doorDirection
         });
 
-        this._roomEngine.createRoomInstance(this._currentRoomId, roomMap);
+        return roomMap;
     }
 
     private onRoomHeightMapEvent(event: RoomHeightMapEvent): void
