@@ -9,8 +9,6 @@ import { ObjectRoomMapUpdateMessage } from './messages';
 import { RoomPlaneParser } from './object/RoomPlaneParser';
 import { FurnitureStackingHeightMap, LegacyWallGeometry } from './utils';
 
-// Local mirror of `RoomEngine.ROOM_OBJECT_ID` to avoid a circular
-// import between this handler and the engine that owns it.
 const ROOM_OWN_OBJECT_ID = -1;
 
 type AreaHideControllerState = {
@@ -56,8 +54,6 @@ export class RoomMessageHandler
     {
         this._connection = GetCommunication().connection;
         this._roomEngine = GetRoomEngine();
-
-        // Store all message events for cleanup
         this._messageEvents = [
             new UserInfoEvent(this.onUserInfoEvent.bind(this)),
             new RoomReadyMessageEvent(this.onRoomReadyMessageEvent.bind(this)),
@@ -108,7 +104,6 @@ export class RoomMessageHandler
             new GuideSessionErrorMessageEvent(this.onGuideSessionErrorMessageEvent.bind(this))
         ];
 
-        // Register all message events
         for(const event of this._messageEvents)
         {
             this._connection.addMessageEvent(event);
@@ -117,7 +112,6 @@ export class RoomMessageHandler
 
     public dispose(): void
     {
-        // Remove all message events
         if(this._connection)
         {
             for(const event of this._messageEvents)
@@ -242,35 +236,9 @@ export class RoomMessageHandler
 
         if(!roomMap) return;
 
-        // Initial server-driven load: create the instance from
-        // scratch. RoomEngine.createRoomInstance is a no-op when
-        // the room already exists, so we never accidentally wipe
-        // furniture/avatars on a re-enter.
         this._roomEngine.createRoomInstance(this._currentRoomId, roomMap);
     }
 
-    /**
-     * Apply a floor model to the ACTIVE room locally, without
-     * touching the server. Drives the same `wallGeometry` +
-     * `RoomPlaneParser` pipeline as the wire-driven path, then
-     * routes the resulting `RoomMapData` through the room object's
-     * `ObjectRoomMapUpdateMessage` channel — the same mechanism
-     * `RoomPreviewer.updateRoomPlanes` uses. The visualization
-     * rebuilds in place, so existing furniture and avatars are
-     * preserved.
-     *
-     * Intended for tools that need a live in-room preview of a
-     * floor edit before the user commits to a server save (e.g.
-     * the React floor-plan editor's live-preview mode). The wire
-     * `UpdateFloorPropertiesMessageComposer` is still the source
-     * of truth — call this purely for transient client-side
-     * preview, then send the composer separately when the user
-     * confirms.
-     *
-     * @returns `true` if the floor was rebuilt; `false` if no
-     *   active room is bound, the engine isn't ready, or the
-     *   model string failed to parse.
-     */
     public applyFloorModelLocally(modelString: string, wallHeight: number, scale: boolean = true): boolean
     {
         if(!this._roomEngine || this._currentRoomId <= 0 || !modelString) return false;
@@ -289,16 +257,18 @@ export class RoomMessageHandler
 
         if(!roomObject) return false;
 
+        const currentMap = roomObject.model.getValue<{ holeMap?: { id: number, x: number, y: number, width: number, height: number, invert: boolean }[] }>(RoomObjectVariable.ROOM_MAP_DATA);
+
+        if(currentMap && currentMap.holeMap && currentMap.holeMap.length)
+        {
+            for(const hole of currentMap.holeMap)
+            {
+                if(hole) roomMap.holeMap.push(hole);
+            }
+        }
+
         roomObject.processUpdateMessage(new ObjectRoomMapUpdateMessage(roomMap));
-
-        // Floor visualization is updated above. Without this second
-        // step the FurnitureStackingHeightMap still reflects the
-        // pre-edit floor, so the room thinks every newly-painted
-        // tile is "blocked" and rejects furni placement on it.
-        // Rebuild it from the same parser so the stacking-map and
-        // the visual floor agree.
         this._rebuildFurnitureStackingMap(parser);
-
         return true;
     }
 
@@ -336,14 +306,6 @@ export class RoomMessageHandler
         this._roomEngine.refreshTileObjectMap(this._currentRoomId, 'RoomMessageHandler.applyFloorModelLocally');
     }
 
-    /**
-     * Shared body of `onRoomModelEvent` and
-     * `applyFloorModelLocally`. Feeds the floor heightmap into
-     * `_planeParser`, refreshes `wallGeometry`, and returns the
-     * resulting `RoomMapData` (doors included). The caller decides
-     * whether to seed a fresh room (initial enter) or update an
-     * existing one (live preview).
-     */
     private _rebuildFloorGeometry(parser: FloorHeightMapMessageParser)
     {
         const wallGeometry = this._roomEngine.getLegacyWallGeometry(this._currentRoomId);
@@ -1797,44 +1759,6 @@ export class RoomMessageHandler
 
         this._roomEngine.updateRoomObjectUserAction(this._currentRoomId, userData.roomIndex, RoomObjectVariable.FIGURE_GUIDE_STATUS, status);
     }
-
-    // public _SafeStr_10580(event:_SafeStr_2242): void
-    // {
-    //     var arrayIndex: number;
-    //     var discoColours:Array;
-    //     var discoTimer:Timer;
-    //     var eventParser:_SafeStr_4576 = (event.parser as _SafeStr_4576);
-    //     switch (eventParser._SafeStr_7025)
-    //     {
-    //         case 0:
-    //             _SafeStr_4588.init(250, 5000);
-    //             _SafeStr_4588._SafeStr_6766();
-    //             return;
-    //         case 1:
-    //             _SafeStr_4231.init(250, 5000);
-    //             _SafeStr_4231._SafeStr_6766();
-    //             return;
-    //         case 2:
-    //             NitroEventDispatcher.dispatchEvent(new _SafeStr_2821(this._SafeStr_10593, -1, true));
-    //             return;
-    //         case 3:
-    //             arrayIndex = 0;
-    //             discoColours = [29371, 16731195, 16764980, 0x99FF00, 29371, 16731195, 16764980, 0x99FF00, 0];
-    //             discoTimer = new Timer(1000, (discoColours.length + 1));
-    //             discoTimer.addEventListener(TimerEvent.TIMER, function (k:TimerEvent): void
-    //             {
-    //                 if (arrayIndex == discoColours.length)
-    //                 {
-    //                     _SafeStr_10592._SafeStr_21164(_SafeStr_10593, discoColours[arrayIndex++], 176, true);
-    //                 } else
-    //                 {
-    //                     _SafeStr_10592._SafeStr_21164(_SafeStr_10593, discoColours[arrayIndex++], 176, false);
-    //                 };
-    //             });
-    //             discoTimer.start();
-    //             return;
-    //     };
-    // }
 
     public get currentRoomId(): number
     {
