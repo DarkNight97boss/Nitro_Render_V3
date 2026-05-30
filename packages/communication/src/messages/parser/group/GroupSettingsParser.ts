@@ -85,6 +85,12 @@ export class GroupSettingsParser implements IMessageParser
 
         this._badgeCode = wrapper.readString();
         this._membersCount = wrapper.readInt();
+
+        // Stock Arcturus 3.5.5 GuildManageComposer ends at memberCount and
+        // does NOT emit a trailing hasForum boolean (that's a fork extension).
+        // Guard the read so the parser degrades cleanly on stock servers.
+        if(!wrapper.bytesAvailable) return true;
+
         this._hasForum = wrapper.readBoolean();
 
         return true;

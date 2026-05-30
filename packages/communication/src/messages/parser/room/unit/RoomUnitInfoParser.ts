@@ -52,18 +52,40 @@ export class RoomUnitInfoParser implements IMessageParser
         this._gender = wrapper.readString().toLocaleUpperCase();
         this._motto = wrapper.readString();
         this._achievementScore = wrapper.readInt();
+
+        // Stock Arcturus 3.5.5 wire ends here. All following fields are
+        // InfostandBackground / InfostandPrefix / Border fork extras emitted
+        // by the upstream fork in distinct tiers. Use the flat early-return
+        // chain (see CLAUDE.md "Optional-trailing-field parsers") so each
+        // tier is consumed atomically and defaults from flush() apply to
+        // any tiers the server doesn't ship.
+        if(!wrapper.bytesAvailable) return true;
+
+        // block 1: InfostandBackground (3 ints)
         this._backgroundId = wrapper.readInt();
         this._standId = wrapper.readInt();
         this._overlayId = wrapper.readInt();
-        this._cardBackgroundId = (wrapper.bytesAvailable ? wrapper.readInt() : 0);
-        this._nickIcon = (wrapper.bytesAvailable ? wrapper.readString() : '');
-        this._prefixText = (wrapper.bytesAvailable ? wrapper.readString() : '');
-        this._prefixColor = (wrapper.bytesAvailable ? wrapper.readString() : '');
-        this._prefixIcon = (wrapper.bytesAvailable ? wrapper.readString() : '');
-        this._prefixEffect = (wrapper.bytesAvailable ? wrapper.readString() : '');
-        this._prefixFont = (wrapper.bytesAvailable ? wrapper.readString() : '');
-        this._displayOrder = (wrapper.bytesAvailable ? wrapper.readString() : 'icon-prefix-name');
-        this._borderId = (wrapper.bytesAvailable ? wrapper.readInt() : 0);
+
+        if(!wrapper.bytesAvailable) return true;
+
+        // block 2: card background (1 int)
+        this._cardBackgroundId = wrapper.readInt();
+
+        if(!wrapper.bytesAvailable) return true;
+
+        // block 3: InfostandPrefix (nickIcon + 5 prefix strings + displayOrder)
+        this._nickIcon = wrapper.readString();
+        this._prefixText = wrapper.readString();
+        this._prefixColor = wrapper.readString();
+        this._prefixIcon = wrapper.readString();
+        this._prefixEffect = wrapper.readString();
+        this._prefixFont = wrapper.readString();
+        this._displayOrder = wrapper.readString();
+
+        if(!wrapper.bytesAvailable) return true;
+
+        // block 4: Infostand Borders (1 int)
+        this._borderId = wrapper.readInt();
 
         return true;
     }

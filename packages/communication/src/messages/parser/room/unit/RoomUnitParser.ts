@@ -34,10 +34,8 @@ export class RoomUnitParser implements IMessageParser
             const id = wrapper.readInt();
             const username = wrapper.readString();
             const custom = wrapper.readString();
-			const background = wrapper.readInt();
-            const stand = wrapper.readInt();
-            const overlay = wrapper.readInt();
-            const cardBackground = wrapper.readInt();
+            // Stock Arcturus 3.5.5 wire does NOT emit InfostandBackground extras
+            // (background/stand/overlay/cardBackground). Skip — defaults to 0.
             let figure = wrapper.readString();
             const roomIndex = wrapper.readInt();
             const x = wrapper.readInt();
@@ -51,10 +49,6 @@ export class RoomUnitParser implements IMessageParser
             user.dir = direction;
             user.name = username;
             user.custom = custom;
-			user.background = background;
-            user.stand = stand;
-            user.overlay = overlay;
-            user.cardBackground = cardBackground;
             user.x = x;
             user.y = y;
             user.z = z;
@@ -77,13 +71,9 @@ export class RoomUnitParser implements IMessageParser
                 user.figure = figure;
                 user.activityPoints = wrapper.readInt();
                 user.isModerator = wrapper.readBoolean();
-                user.nickIcon = wrapper.readString();
-                user.prefixText = wrapper.readString();
-                user.prefixColor = wrapper.readString();
-                user.prefixIcon = wrapper.readString();
-                user.prefixEffect = wrapper.readString();
-                user.prefixFont = wrapper.readString();
-                user.displayOrder = wrapper.readString();
+                // Stock Arcturus 3.5.5 does NOT emit the InfostandPrefix extras
+                // (nickIcon/prefixText/prefixColor/prefixIcon/prefixEffect/prefixFont/displayOrder).
+                // Skip — leave as undefined.
             }
 
             else if(type === 2)
@@ -144,19 +134,9 @@ export class RoomUnitParser implements IMessageParser
                 }
             }
 
-            user.roomEntryMethod = wrapper.readString();
-            user.roomEntryTeleportId = wrapper.readInt();
-            // Arcturus appends a trailing borderId int per user
-            // (RoomUsersComposer, after the Infostand Borders feature)
-            // for every record — habbo, bot, rentable bot — using 0 as
-            // the constant for the records that have no border. The
-            // read MUST be unconditional: a bytesAvailable guard would
-            // be semantically wrong here (the guard answers "any byte
-            // left in the whole packet?" not "any byte left for THIS
-            // user"), and skipping the read would leave 4 bytes per
-            // record and cascade-corrupt every subsequent user in the
-            // roster.
-            user.borderId = wrapper.readInt();
+            // Stock Arcturus 3.5.5 does NOT emit roomEntryMethod/roomEntryTeleportId
+            // (per-user wire suffix added by the upstream fork) nor the trailing
+            // borderId from the Infostand Borders fork. Skip — leave undefined/0.
 
             i++;
         }

@@ -43,8 +43,12 @@ export class CatalogPageMessageOfferData
         this._bundlePurchaseAllowed = wrapper.readBoolean();
         this._isPet = wrapper.readBoolean();
         this._previewImage = wrapper.readString();
-        this._itemIds = wrapper.readString();
-        this._haveOffer = wrapper.readBoolean();
+        // Stock Arcturus (CatalogItem.serialize) does NOT emit itemIds or
+        // haveOffer here — those extras were a V3 fork addition. Reading them
+        // inside a per-offer loop cascade-corrupted the whole catalog page
+        // (same shape bug as the NodeData.parentId issue). Defaults from
+        // declaration: itemIds=undefined, haveOffer=undefined. The getters
+        // still exist so the React side compiles.
     }
 
     public get offerId(): number

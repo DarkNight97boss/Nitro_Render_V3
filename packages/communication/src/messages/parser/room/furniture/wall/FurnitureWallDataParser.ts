@@ -78,13 +78,8 @@ export class FurnitureWallDataParser
         this._secondsToExpiration = wrapper.readInt();
         this._usagePolicy = wrapper.readInt();
         this._userId = wrapper.readInt();
-        this._allowStack = (wrapper.readInt() === 1);
-        this._allowSit = (wrapper.readInt() === 1);
-        this._allowLay = (wrapper.readInt() === 1);
-        this._allowWalk = (wrapper.readInt() === 1);
-        this._dimensionsX = wrapper.readInt();
-        this._dimensionsY = wrapper.readInt();
-        this._teleportTargetId = wrapper.readInt();
+        // Stock Arcturus 3.5.5 does NOT emit the trailing wall-furni permission extras
+        // (allowStack/Sit/Lay/Walk, dimensionsX/Y, teleportTargetId).
         this._username = null;
 
         const state = parseFloat(this._stuffData);

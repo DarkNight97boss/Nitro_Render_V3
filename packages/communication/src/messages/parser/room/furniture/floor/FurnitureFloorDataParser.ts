@@ -86,13 +86,9 @@ export class FurnitureFloorDataParser
         this._expires = wrapper.readInt();
         this._usagePolicy = wrapper.readInt();
         this._userId = wrapper.readInt();
-        this._allowStack = (wrapper.readInt() === 1);
-        this._allowSit = (wrapper.readInt() === 1);
-        this._allowLay = (wrapper.readInt() === 1);
-        this._allowWalk = (wrapper.readInt() === 1);
-        this._dimensionsX = wrapper.readInt();
-        this._dimensionsY = wrapper.readInt();
-        this._teleportTargetId = wrapper.readInt();
+        // Stock Arcturus 3.5.5 does NOT emit the trailing furniture-permission
+        // extras (allowStack/Sit/Lay/Walk, dimensionsX/Y, teleportTargetId)
+        // added by the upstream fork. Leave defaults.
         this._username = null;
 
         if(this._spriteId < 0) this._spriteName = wrapper.readString();

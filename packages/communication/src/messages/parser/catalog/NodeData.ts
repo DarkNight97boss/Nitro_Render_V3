@@ -45,7 +45,11 @@ export class NodeData
         this._visible = wrapper.readBoolean();
         this._icon = wrapper.readInt();
         this._pageId = wrapper.readInt();
-        this._parentId = wrapper.readInt();
+        // Stock Arcturus 3.5.5 does NOT emit parentId inline (the V3 fork added it).
+        // Reading it here was cascade-corrupting the entire NodeData tree (recursive
+        // children), making the Shop modal appear empty. The parser keeps the
+        // _parentId field at default -1 for now — if we ever wire the upstream
+        // emit on the server, we can re-add the read.
         this._pageName = wrapper.readString();
         this._localization = wrapper.readString();
 

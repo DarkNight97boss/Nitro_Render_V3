@@ -48,15 +48,13 @@ export class RoomUnitChatParser implements IMessageParser
 
         this.parseUrls(wrapper);
 
-		this._chatColours = wrapper.readString();
+        // Stock Arcturus 3.5.5 wire layout ends with messageLength (int).
+        // Do NOT read the prefix/colour extras (chatColours, prefixText,
+        // prefixColor, prefixIcon, prefixEffect, prefixFont, nickIcon)
+        // — those are emitted only by the fork that ships the
+        // InfostandPrefix feature, which this server doesn't run.
+        // Reading them here misaligns the stream and trips a RangeError.
         this._messageLength = wrapper.readInt();
-        this._prefixText = wrapper.readString();
-        this._prefixColor = wrapper.readString();
-        this._prefixIcon = wrapper.readString();
-        this._prefixEffect = wrapper.readString();
-        this._prefixFont = wrapper.readString();
-        this._nickIcon = wrapper.readString();
-        this._displayOrder = (wrapper.bytesAvailable ? wrapper.readString() : 'icon-prefix-name');
 
         return true;
     }
